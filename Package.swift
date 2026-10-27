@@ -7,10 +7,27 @@ let package = Package(
         .macOS(.v14)
     ],
     products: [
-        .library(name: "UnfairPlayCore", targets: ["UnfairPlayCore"])
+        .library(name: "UnfairPlayCore", targets: ["UnfairPlayCore"]),
+        .library(name: "CUnfairPlay", targets: ["CUnfairPlay"])
     ],
     targets: [
-        .target(name: "UnfairPlayCore"),
-        .testTarget(name: "UnfairPlayCoreTests", dependencies: ["UnfairPlayCore"])
+        .target(
+            name: "CUnfairPlay",
+            publicHeadersPath: "include",
+            linkerSettings: [
+                .linkedLibrary("z")
+            ]
+        ),
+        .target(
+            name: "UnfairPlayCore",
+            dependencies: ["CUnfairPlay"],
+            resources: [
+                .copy("Resources")
+            ]
+        ),
+        .testTarget(
+            name: "UnfairPlayCoreTests",
+            dependencies: ["UnfairPlayCore", "CUnfairPlay"]
+        )
     ]
 )

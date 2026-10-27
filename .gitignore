@@ -3,3 +3,15 @@
 .swiftpm/
 *.xcodeproj
 DerivedData/
+
+# 账号级产物一律不入库
+*.ipa
+*.bin
+*.sinf
+*.supf
+*.supx
+Tests/Fixtures/
+UnfairPlayKit-C重写方案.md
+
+# 解释器资产是包资源（非账号级产物），需要入库
+!Sources/UnfairPlayCore/Resources/*.bin

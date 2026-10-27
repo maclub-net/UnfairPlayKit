@@ -6,7 +6,7 @@ import Foundation
 /// `decrypt_ready` 与错误文案判定，不依赖退出码。
 public enum UnfairPlayProbe {
     public static func run(
-        cli: UnfairPlayCLI,
+        cli: any UnfairPlayClient,
         ipa: URL,
         modelDirectory: URL?
     ) async throws -> UnfairPlayProbeResult {

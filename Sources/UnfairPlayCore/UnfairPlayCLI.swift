@@ -34,6 +34,9 @@ public struct UnfairPlayProcessRunner: Sendable {
     }
 }
 
+/// 进程执行的 UnfairPlay CLI 封装，沿用 `UnfairPlayCLI` 作为兼容名。
+public typealias UnfairPlayProcessCLI = UnfairPlayCLI
+
 /// UnfairPlay CLI 的类型安全封装：只暴露 `doctor` / `decrypt` / `--version`。
 ///
 /// 约定（见施工方案 §6.3）：
@@ -195,3 +198,5 @@ public actor UnfairPlayCLI {
         }
     }
 }
+
+extension UnfairPlayCLI: UnfairPlayClient {}
