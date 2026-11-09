@@ -197,3 +197,88 @@ struct UnfairPlayRecoveryMappingTests {
         #expect(mappings.stateFileCount == 3)
     }
 }
+
+@Suite("Recovery reference selection")
+struct UnfairPlayRecoveryReferenceTests {
+    private let exactHash = "1e58d37e9602dd0ca5e24b14762063b6c310248b4d3a94272771d815e4ea1784"
+    private let portableHash = "f68e4407e90af5466d2766e1b1c4637260d08cb0518f991e1797ac6c4964439d"
+
+    private func manifest(
+        fairplaydSHA256: String,
+        evaluatorSHA256: String?,
+        path: String = "fairplayd/fairplayd.arm64e"
+    ) -> UnfairPlayEnrollmentManifest {
+        func file(_ path: String, sha256: String = "") -> UnfairPlayEnrollmentManifest.File {
+            .init(path: path, bytes: 0, sha256: sha256, mode: "0600")
+        }
+        return UnfairPlayEnrollmentManifest(
+            schema: "unfairplay-native-enrollment-capture-v1",
+            createdAt: "2026-01-01T00:00:00Z",
+            productVersion: "26A428",
+            buildVersion: "26A428",
+            fairplayd: file(path, sha256: fairplaydSHA256),
+            enrollmentSupport: UnfairPlayFairPlaySupport(
+                profile: "fixture",
+                build: "fixture",
+                status: "fixture",
+                validationBasis: "fixture",
+                recovery: true,
+                decrypt: true,
+                evaluatorProfile: nil,
+                evaluatorSHA256: evaluatorSHA256
+            ),
+            hardwareMAC: file("hardware/iomac.bin"),
+            app: .init(
+                bundleIdentifier: "com.example.synthetic",
+                executable: "Synthetic",
+                executablePath: "Synthetic.app/Synthetic",
+                selector: .init(user: 0, key: 0),
+                selectorID: "00000000:00000000",
+                sinfPath: "app/SC_Info/Synthetic.sinf",
+                targetSINFPath: "Synthetic.sinf",
+                ipaMemberRoot: "Payload/Synthetic.app"
+            ),
+            ipa: nil,
+            files: [],
+            warnings: []
+        )
+    }
+
+    @Test("A capture of the exact build pages in its own fairplayd")
+    func exactBuildUsesCapturedBinary() throws {
+        let reference = try UnfairPlaySetup.recoveryReference(
+            capture: URL(fileURLWithPath: "/tmp/capture"),
+            manifest: manifest(fairplaydSHA256: exactHash.uppercased(), evaluatorSHA256: exactHash)
+        )
+        #expect(reference?.path == "/tmp/capture/fairplayd/fairplayd.arm64e")
+    }
+
+    @Test("A portable build runs against the embedded profile")
+    func portableBuildUsesEmbeddedProfile() throws {
+        let reference = try UnfairPlaySetup.recoveryReference(
+            capture: URL(fileURLWithPath: "/tmp/capture"),
+            manifest: manifest(fairplaydSHA256: portableHash, evaluatorSHA256: exactHash)
+        )
+        #expect(reference == nil)
+    }
+
+    @Test("A capture without an evaluator hash keeps the embedded profile")
+    func missingEvaluatorUsesEmbeddedProfile() throws {
+        let reference = try UnfairPlaySetup.recoveryReference(
+            capture: URL(fileURLWithPath: "/tmp/capture"),
+            manifest: manifest(fairplaydSHA256: exactHash, evaluatorSHA256: nil)
+        )
+        #expect(reference == nil)
+    }
+
+    @Test("A captured fairplayd outside the capture directory is rejected")
+    func unsafeCapturedPathIsRejected() {
+        let manifest = manifest(fairplaydSHA256: exactHash, evaluatorSHA256: exactHash, path: "../fairplayd")
+        #expect(throws: UnfairPlaySetupError.self) {
+            _ = try UnfairPlaySetup.recoveryReference(
+                capture: URL(fileURLWithPath: "/tmp/capture"),
+                manifest: manifest
+            )
+        }
+    }
+}
