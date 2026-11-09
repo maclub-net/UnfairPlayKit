@@ -186,7 +186,7 @@ extension UnfairPlaySetup {
         let manifest = try JSONDecoder().decode(UnfairPlayEnrollmentManifest.self, from: manifestData)
         let bundle = try UnfairPlayRecoveryAssets.load()
         let hardware = capture.directory.appendingPathComponent("hardware/iomac.bin")
-        let reference = capture.directory.appendingPathComponent("fairplayd/fairplayd.arm64e")
+        let reference = try recoveryReference(capture: capture.directory, manifest: manifest)
 
         var failures: [String] = []
         for attempt in [
@@ -205,7 +205,7 @@ extension UnfairPlaySetup {
                     mappings: mappings.specifications,
                     hardwarePath: hardware.path,
                     executablePath: manifest.app.executablePath,
-                    referencePath: reference.path
+                    referencePath: reference?.path
                 )
                 return UnfairPlaySetupRecovery(
                     model: recovered.model,
@@ -228,12 +228,35 @@ extension UnfairPlaySetup {
         let extractedBlockHits: Int
     }
 
+    /// Selects the binary the recovery engine may page in for the captured
+    /// build. The embedded profile only accepts its own binary, exactly like
+    /// the Go runner: anything else runs against the embedded profile alone.
+    static func recoveryReference(
+        capture: URL,
+        manifest: UnfairPlayEnrollmentManifest
+    ) throws -> URL? {
+        let evaluator = manifest.enrollmentSupport.evaluatorSHA256 ?? ""
+        guard !evaluator.isEmpty,
+              evaluator.caseInsensitiveCompare(manifest.fairplayd.sha256) == .orderedSame else {
+            return nil
+        }
+        let relative = manifest.fairplayd.path
+        let clean = (relative as NSString).standardizingPath
+        guard !relative.isEmpty, !relative.hasPrefix("/"), clean != ".." else {
+            throw UnfairPlaySetupError.recoveryFailed("采集中的 fairplayd 路径不安全")
+        }
+        guard !clean.hasPrefix("../") else {
+            throw UnfairPlaySetupError.recoveryFailed("采集中的 fairplayd 路径不安全")
+        }
+        return capture.appendingPathComponent(clean)
+    }
+
     private static func runRecovery(
         bundle: UnfairPlayRecoveryAssets.Assets,
         mappings: [String],
         hardwarePath: String,
         executablePath: String,
-        referencePath: String
+        referencePath: String?
     ) throws -> RecoveryOutput {
         let context = up_context_create(nil)
         guard let context else {
@@ -252,7 +275,7 @@ extension UnfairPlaySetup {
                         try bundle.kernels.withUnsafeBytes { kernels in
                             try hardwarePath.withCString { hardware in
                                 try executablePath.withCString { executable in
-                                    try referencePath.withCString { reference in
+                                    try (referencePath ?? "").withCString { reference in
                                         try pointers.withUnsafeMutableBufferPointer { list in
                                             var assets = up_recovery_assets()
                                             assets.model_gz = model.bindMemory(to: UInt8.self).baseAddress
